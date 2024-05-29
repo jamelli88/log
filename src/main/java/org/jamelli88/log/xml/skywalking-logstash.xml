@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<included>
+    <!--
+        // 参考：https://blog.csdn.net/Hello_World_QWP/article/details/115969198
+        // Failed to rename context [logback] as [nacos] java.lang.IllegalStateException: Context has been already given a name
+        // 启动配置
+        System.setProperty("nacos.logging.default.config.enabled","false");
+    -->
+    <!--
+    logstash配置
+    input {
+       tcp {
+            port => 5044
+            codec => "json_lines"
+          }
+        }
+
+    output {
+      elasticsearch {
+        hosts => ["192.168.110.90:9200"]
+        index => "log-cdsk-%{+YYYY.MM.dd}"
+        #user => "elastic"
+        #password => "changeme"
+      }
+      stdout { codec => rubydebug }
+    }
+     -->
+    <!-- 需要配置logstash -->
+    <springProperty scope="context" name="logstash.ips" source="cdsk.logstash.ips" defaultValue="127.0.0.1:5044"/>
+    <springProperty scope="context" name="logstash.connectionTTL" source="cdsk.logstash.connectionTTL"
+                    defaultValue="5 minutes"/>
+
+    <!-- https://github.com/logfellow/logstash-logback-encoder -->
+    <appender name="LOGSTASH_APPENDER" class="net.logstash.logback.appender.LogstashTcpSocketAppender">
+        <includeCallerData>true</includeCallerData>
+        <destination>${logstash.ips}</destination>
+        <!-- encoder必须配置,有多种可选 -->
+        <!-- 日志输出编码 -->
+        <encoder charset="UTF-8"
+                 class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+            <providers>
+                <pattern>
+                    <omitEmptyFields>true</omitEmptyFields>
+                    <pattern>
+                        {
+                            "severName": "${spring.application.name}",
+                            "severIp": "%ip",
+                            "severPort": ${server.port},
+                            "level": "%p",
+                            "marker": "%xMarker",
+                            "method": "%xLogger.%xMethod:%xLine",
+                            "message": "%m",
+                            "exception": "${LOG_EXCEPTION_CONVERSION_WORD:-%wEx}",
+                            "tid": "%X{tid}",
+                            "requestInfo": "#tryJson{%X{requestInfo}}",
+                            "createTime": "%d{yyyy-MM-dd HH:mm:ss.SSS}"
+                        }
+                    </pattern>
+                </pattern>
+            </providers>
+        </encoder>
+        <!-- 轮询负载各端口 -->
+        <connectionStrategy>
+            <roundRobin>
+                <connectionTTL>${logstash.connectionTTL}</connectionTTL>
+            </roundRobin>
+        </connectionStrategy>
+    </appender>
+    <appender name="ASYNC_LOGSTASH_APPENDER" class="net.logstash.logback.appender.LoggingEventAsyncDisruptorAppender">
+        <appender-ref ref="LOGSTASH_APPENDER"/>
+    </appender>
+</included>
